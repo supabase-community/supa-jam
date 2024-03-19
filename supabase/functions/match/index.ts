@@ -1,3 +1,9 @@
+import { WebClient } from "npm:@slack/web-api";
+
+// An access token (from your Slack app or custom integration - xoxp, xoxb)
+const slackBotToken = Deno.env.get("SLACK_TOKEN") ?? "";
+const botClient = new WebClient(slackBotToken);
+
 // Pulls the users, creates matches, and inserts it into the database
 
 interface SlackMember {
@@ -7,18 +13,7 @@ interface SlackMember {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "GET") {
-    return new Response("Not Get request", {
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const userListResponse = await fetch("https://slack.com/api/users.list", {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("SLACK_BOT_TOKEN")}`,
-    },
-  });
+  const userListResponse = await botClient.users.list({});
 
   if (!userListResponse.ok) {
     return new Response("Failed to fetch users", {
@@ -26,13 +21,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  const userList: SlackMember[] = (await userListResponse.json()).members;
+  const userList: SlackMember[] = userListResponse.members;
 
   // TODO: match the users
 
   // TODO: insert the maches into the database
 
-  return new Response(JSON.stringify({}), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return Response.json({ members: userList, total: userList.length });
 });
