@@ -11,6 +11,25 @@ interface Match {
   users: string[];
 }
 
+const sendMessage = async (
+  { users, text }: { users: string; text: string },
+) => {
+  return undefined;
+  // Dangerous!
+  const con = await botClient.conversations.open({
+    users,
+  });
+  if (con.ok && con.channel?.id) {
+    const message = botClient.chat.postMessage({
+      channel: con.channel.id,
+      text,
+    });
+    return message;
+  } else {
+    console.log(con.error);
+  }
+};
+
 // Pulls the users, creates matches, and inserts it into the database
 Deno.serve(async (req) => {
   const userListResponse = await botClient.users.list({});
@@ -22,32 +41,49 @@ Deno.serve(async (req) => {
   }
 
   const userList = userListResponse.members!;
-
-  // TODO: match the users
-
-  const shuffledUserList = userList
+  // filter bots
+  const realUsers = userList.filter((user) => !user.is_bot);
+  // TODO: filter unsubscribed users.
+  // TODO: filter external users.
+  // TODO: filter single channel users.
+  const shuffledUserList = realUsers
     .map((value) => ({ value, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
-    .map(({ value }) => value);
+    .map(({ value }) => value.id ?? "");
 
   const matches: Match[] = [];
 
-  for (const slackUser of shuffledUserList) {
-    const isEmptyMatch = matches[matches.length - 1].users.length == 0;
-    if (isEmptyMatch) {
-      matches[matches.length - 1].users.push(slackUser.id!);
-    } else {
-      matches.push({ users: [slackUser.id!] });
-    }
+  const chunkSize = 2;
+
+  for (let i = 0; i < shuffledUserList.length; i += chunkSize) {
+    const chunk = shuffledUserList.slice(i, i + chunkSize);
+    matches.push({ users: chunk });
   }
 
-  // TODO: insert the maches into the database
+  // Send message to matches
+  const slackMessages = await Promise.allSettled(
+    matches.map((match) => {
+      if (match.users.length === 2) {
+        return sendMessage({
+          users: `${match.users[0]},${match.users[1]}`,
+          text: `
+            :wave: <@${match.users[0]}>, <@${match.users[1]}>
+            It can be hard to connect on a distributed team, so SupaJam (not-Donut) intros everyone to meet every week. 
+            Now that you're here, schedule a time to meet! :coffee::computer:
+      `.trim(),
+        });
+      }
+    }),
+  );
+  // TODO: store message ids with matches
+  // Insert the maches into the database
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  supabase.from("matches").insert(matches);
+  const { error } = await supabase.from("matches").insert(matches);
+  if (error) console.log(error.message);
 
-  return Response.json({ members: userList, total: userList.length });
+  return new Response("ok");
 });
