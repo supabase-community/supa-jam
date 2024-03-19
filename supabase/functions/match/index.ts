@@ -6,11 +6,26 @@ const botClient = new WebClient(slackBotToken);
 
 // Pulls the users, creates matches, and inserts it into the database
 
-Deno.serve(async (req) => {
-  const users = await botClient.users.list({});
+interface SlackMember {
+  id: string;
+  name: string;
+  real_name: string;
+}
 
-  return Response.json({
-    members: users.members,
-    total: users.members?.length,
-  });
+Deno.serve(async (req) => {
+  const userListResponse = await botClient.users.list({});
+
+  if (!userListResponse.ok) {
+    return new Response("Failed to fetch users", {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const userList: SlackMember[] = userListResponse.members;
+
+  // TODO: match the users
+
+  // TODO: insert the maches into the database
+
+  return Response.json({ members: userList, total: userList.length });
 });
