@@ -1,4 +1,4 @@
-import { WebClient } from "npm:@slack/web-api";
+import { WebClient } from "npm:@slack/web-api@7.0.2";
 
 // An access token (from your Slack app or custom integration - xoxp, xoxb)
 const slackBotToken = Deno.env.get("SLACK_TOKEN") ?? "";
@@ -40,13 +40,21 @@ Deno.serve(async (req) => {
     });
   }
 
-  const userList = userListResponse.members!;
+  let userList = userListResponse.members!;
   // filter bots
-  const realUsers = userList.filter((user) => !user.is_bot);
+  userList = userList.filter((user) => !user.is_bot);
+  // filter deleted users
+  userList = userList.filter((user) => !user.deleted);
+  // filter guests / single channel users
+  userList = userList.filter((user) =>
+    !user.is_restricted && !user.is_ultra_restricted
+  );
+  console.log({ userList, total: userList.length + 1 });
+  // filter external users
+  // TODO: is_stranger does not seem to exist on Member type?
+  // userList = userList.filter((user) => !user.is_stranger);
   // TODO: filter unsubscribed users.
-  // TODO: filter external users.
-  // TODO: filter single channel users.
-  const shuffledUserList = realUsers
+  const shuffledUserList = userList
     .map((value) => ({ value, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
     .map(({ value }) => value.id ?? "");
