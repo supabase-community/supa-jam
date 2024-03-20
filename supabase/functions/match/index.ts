@@ -6,16 +6,21 @@ const botClient = new WebClient(slackBotToken);
 
 // Pulls the users, creates matches, and inserts it into the database
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { Database } from "../_shared/database.types.ts";
+
+const supabase = createClient<Database>(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
 
 interface Match {
   users: string[];
+  message_id?: string | null;
 }
 
 const sendMessage = async (
   { users, text }: { users: string; text: string },
 ) => {
-  return undefined;
-  // Dangerous!
   const con = await botClient.conversations.open({
     users,
   });
@@ -31,29 +36,19 @@ const sendMessage = async (
 };
 
 // Pulls the users, creates matches, and inserts it into the database
-Deno.serve(async (req) => {
-  const userListResponse = await botClient.users.list({});
-
-  if (!userListResponse.ok) {
-    return new Response("Failed to fetch users", {
-      headers: { "Content-Type": "application/json" },
-    });
+Deno.serve(async (_req) => {
+  // Get users from DB
+  const { data: userList, error } = await supabase.from("members").select("id")
+    .like(
+      "email",
+      "%@supabase.%",
+    ).is("is_subscribed", true);
+  if (error) {
+    console.log(error.message);
+    return Response.json(error);
   }
 
-  let userList = userListResponse.members!;
-  // filter bots
-  userList = userList.filter((user) => !user.is_bot);
-  // filter deleted users
-  userList = userList.filter((user) => !user.deleted);
-  // filter guests / single channel users
-  userList = userList.filter((user) =>
-    !user.is_restricted && !user.is_ultra_restricted
-  );
-  console.log({ userList, total: userList.length + 1 });
-  // filter external users
-  // TODO: is_stranger does not seem to exist on Member type?
-  // userList = userList.filter((user) => !user.is_stranger);
-  // TODO: filter unsubscribed users.
+  // Shuffle
   const shuffledUserList = userList
     .map((value) => ({ value, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
@@ -69,10 +64,10 @@ Deno.serve(async (req) => {
   }
 
   // Send message to matches
-  const slackMessages = await Promise.allSettled(
-    matches.map((match) => {
+  const allResults = await Promise.allSettled(
+    matches.map(async (match) => {
       if (match.users.length === 2) {
-        return sendMessage({
+        const message = await sendMessage({
           users: `${match.users[0]},${match.users[1]}`,
           text: `
             :wave: <@${match.users[0]}>, <@${match.users[1]}>
@@ -80,18 +75,25 @@ Deno.serve(async (req) => {
             Now that you're here, schedule a time to meet! :coffee::computer:
       `.trim(),
         });
+        match.message_id = message?.channel ?? null;
+        return match;
       }
     }),
   );
-  // TODO: store message ids with matches
-  // Insert the maches into the database
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  // store message ids with matches
+  let matchesWithMessages = allResults.map((res) => {
+    if (res.status == "fulfilled") {
+      return res.value;
+    } else return undefined;
+  });
+  const matchesWithMessagesDefined: Match[] = matchesWithMessages.filter(
+    (element) => (element !== undefined),
   );
-
-  const { error } = await supabase.from("matches").insert(matches);
-  if (error) console.log(error.message);
+  // Insert the maches into the database
+  const { error: upsertError } = await supabase.from("matches").insert(
+    matchesWithMessagesDefined,
+  );
+  if (upsertError) console.log(upsertError.message);
 
   return new Response("ok");
 });
