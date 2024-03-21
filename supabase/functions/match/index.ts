@@ -19,7 +19,7 @@ interface Match {
 }
 
 const sendMessage = async (
-  { users, text }: { users: string; text: string },
+  { users, blocks }: { users: string; blocks: any },
 ) => {
   try {
     const con = await botClient.conversations.open({
@@ -28,7 +28,7 @@ const sendMessage = async (
     if (con.ok && con.channel?.id) {
       const message = await botClient.chat.postMessage({
         channel: con.channel.id,
-        text,
+        blocks,
       });
       return message;
     } else {
@@ -74,11 +74,28 @@ Deno.serve(async (_req) => {
       if (match.users.length === 2) {
         const message = await sendMessage({
           users: `${match.users[0]},${match.users[1]}`,
-          text: `
+          blocks: [{
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": `
 :wave: <@${match.users[0]}>, <@${match.users[1]}>
 It can be hard to connect on a distributed team, so SupaJam (not-Donut) intros everyone to meet someone once a month. 
 Now that you're here, schedule a time to meet! :coffee::computer:
       `.trim(),
+            },
+          }, {
+            "type": "actions",
+            "elements": [{
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Unsubscribe me forever :sob:",
+              },
+              "value": "unsubscribe",
+              "action_id": "unsubscribe",
+            }],
+          }],
         });
         match.message_id = message?.channel ?? null;
         return match;
