@@ -21,17 +21,22 @@ interface Match {
 const sendMessage = async (
   { users, text }: { users: string; text: string },
 ) => {
-  const con = await botClient.conversations.open({
-    users,
-  });
-  if (con.ok && con.channel?.id) {
-    const message = botClient.chat.postMessage({
-      channel: con.channel.id,
-      text,
+  try {
+    const con = await botClient.conversations.open({
+      users,
     });
-    return message;
-  } else {
-    console.log(con.error);
+    if (con.ok && con.channel?.id) {
+      const message = await botClient.chat.postMessage({
+        channel: con.channel.id,
+        text,
+      });
+      return message;
+    } else {
+      console.log(con.error);
+    }
+  } catch (error) {
+    console.log(error);
+    throw error;
   }
 };
 
@@ -70,9 +75,9 @@ Deno.serve(async (_req) => {
         const message = await sendMessage({
           users: `${match.users[0]},${match.users[1]}`,
           text: `
-            :wave: <@${match.users[0]}>, <@${match.users[1]}>
-            It can be hard to connect on a distributed team, so SupaJam (not-Donut) intros everyone to meet every week. 
-            Now that you're here, schedule a time to meet! :coffee::computer:
+:wave: <@${match.users[0]}>, <@${match.users[1]}>
+It can be hard to connect on a distributed team, so SupaJam (not-Donut) intros everyone to meet someone once a month. 
+Now that you're here, schedule a time to meet! :coffee::computer:
       `.trim(),
         });
         match.message_id = message?.channel ?? null;
@@ -81,19 +86,17 @@ Deno.serve(async (_req) => {
     }),
   );
   // store message ids with matches
-  let matchesWithMessages = allResults.map((res) => {
-    if (res.status == "fulfilled") {
-      return res.value;
-    } else return undefined;
-  });
-  const matchesWithMessagesDefined: Match[] = matchesWithMessages.filter(
-    (element) => (element !== undefined),
-  );
+  const matchesWithMessages = allResults.reduce(function (result, match) {
+    if (match.status == "fulfilled" && match.value !== undefined) {
+      result.push(match.value);
+    }
+    return result;
+  }, [] as Match[]);
   // Insert the maches into the database
   const { error: upsertError } = await supabase.from("matches").insert(
-    matchesWithMessagesDefined,
+    matchesWithMessages,
   );
   if (upsertError) console.log(upsertError.message);
 
-  return new Response("ok");
+  return new Response("okidoki");
 });

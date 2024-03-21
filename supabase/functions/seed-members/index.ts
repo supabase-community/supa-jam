@@ -11,7 +11,7 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-Deno.serve(async (req) => {
+Deno.serve(async (_req) => {
   const userListResponse = await botClient.users.list({});
 
   if (!userListResponse.ok) {
@@ -29,9 +29,6 @@ Deno.serve(async (req) => {
   userList = userList.filter((user) =>
     !user.is_restricted && !user.is_ultra_restricted
   );
-  // filter external users
-  // TODO: is_stranger does not seem to exist on Member type?
-  // userList = userList.filter((user) => !user.is_stranger);
   // TODO: filter unsubscribed users.
   userList = userList.map((user) => {
     const { id, team_id, name, real_name, profile } = user;

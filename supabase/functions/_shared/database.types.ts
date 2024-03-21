@@ -59,6 +59,7 @@ export type Database = {
         Row: {
           email: string | null
           id: string
+          is_subscribed: boolean | null
           name: string | null
           real_name: string | null
           team_id: string | null
@@ -66,6 +67,7 @@ export type Database = {
         Insert: {
           email?: string | null
           id: string
+          is_subscribed?: boolean | null
           name?: string | null
           real_name?: string | null
           team_id?: string | null
@@ -73,6 +75,7 @@ export type Database = {
         Update: {
           email?: string | null
           id?: string
+          is_subscribed?: boolean | null
           name?: string | null
           real_name?: string | null
           team_id?: string | null
